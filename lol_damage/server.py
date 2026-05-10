@@ -19,11 +19,57 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
-from .data import DataDragon
+from .data import DataDragon, _strip_tags
 from .models import Build, Item, RunePage, StatShard, Target
 from .predictor import DamagePredictor
 
 WEB_ROOT = Path(__file__).parent / "web"
+
+
+def _short_desc(rune_raw: Dict[str, Any]) -> str:
+    return _strip_tags(rune_raw.get("shortDesc") or rune_raw.get("longDesc") or "")
+
+
+# Stat shards (the third tier on the rune page). Data Dragon does not publish
+# these, so we describe them ourselves; the client maps the chosen shard to
+# a concrete stat bonus before sending the predict payload.
+_STAT_SHARDS = {
+    "rows": [
+        {
+            "name": "Offense",
+            "options": [
+                {"key": "AdaptiveForce", "name": "Adaptive", "glyph": "A",
+                 "desc": "+9 Adaptive Force (+5.4 AD or +9 AP)"},
+                {"key": "AttackSpeed", "name": "Attack Speed", "glyph": "AS",
+                 "desc": "+10% Attack Speed"},
+                {"key": "AbilityHaste", "name": "Ability Haste", "glyph": "H",
+                 "desc": "+8 Ability Haste"},
+            ],
+        },
+        {
+            "name": "Flex",
+            "options": [
+                {"key": "AdaptiveForce", "name": "Adaptive", "glyph": "A",
+                 "desc": "+9 Adaptive Force (+5.4 AD or +9 AP)"},
+                {"key": "MoveSpeed", "name": "Move Speed", "glyph": "MS",
+                 "desc": "+2% Move Speed"},
+                {"key": "HealthScaling", "name": "Health", "glyph": "HP",
+                 "desc": "10–180 Health (by level)"},
+            ],
+        },
+        {
+            "name": "Defense",
+            "options": [
+                {"key": "Health", "name": "Health", "glyph": "HP",
+                 "desc": "+65 Health"},
+                {"key": "Tenacity", "name": "Tenacity", "glyph": "T",
+                 "desc": "+10% Tenacity and Slow Resist"},
+                {"key": "HealthScaling", "name": "Health", "glyph": "HP",
+                 "desc": "10–180 Health (by level)"},
+            ],
+        },
+    ],
+}
 
 
 class _State:
@@ -97,30 +143,76 @@ def _make_handler(state: _State):
                 return
             if path == "/api/champions":
                 dd = state.dd()
-                self._send_json({"version": dd.version, "champions": dd.list_champions()})
+                raw = dd._fetch_json(dd._cdn("champion.json"), f"{dd.version}/champion.json")
+                champ_base = f"https://ddragon.leagueoflegends.com/cdn/{dd.version}/img/champion/"
+                out_champs = []
+                for cid, cdata in raw["data"].items():
+                    img_full = cdata.get("image", {}).get("full", f"{cid}.png")
+                    out_champs.append({
+                        "id": cid,
+                        "name": cdata["name"],
+                        "title": cdata.get("title", ""),
+                        "image": champ_base + img_full,
+                        "tags": cdata.get("tags", []),
+                    })
+                out_champs.sort(key=lambda x: x["name"])
+                self._send_json({"version": dd.version, "champions": out_champs})
                 return
             if path == "/api/items":
                 dd = state.dd()
-                items = [
-                    {
-                        "id": it.id, "name": it.name, "cost": it.cost,
+                raw = dd._fetch_json(dd._cdn("item.json"), f"{dd.version}/item.json")
+                parsed = dd.items()
+                item_base = f"https://ddragon.leagueoflegends.com/cdn/{dd.version}/img/item/"
+                out_items = []
+                for iid_str, idata in raw["data"].items():
+                    iid = int(iid_str)
+                    it = parsed.get(iid)
+                    if it is None or it.cost <= 0:
+                        continue
+                    gold = idata.get("gold", {})
+                    if not gold.get("purchasable", True):
+                        continue
+                    img_full = idata.get("image", {}).get("full", f"{iid}.png")
+                    out_items.append({
+                        "id": iid, "name": it.name, "cost": it.cost,
                         "ad": it.ad, "ap": it.ap, "hp": it.hp, "armor": it.armor, "mr": it.mr,
                         "attack_speed": it.attack_speed, "crit_chance": it.crit_chance,
                         "tags": it.tags,
-                    }
-                    for it in dd.items().values()
-                    if it.cost > 0  # filter out non-purchaseable junk
-                ]
-                items.sort(key=lambda x: x["name"])
-                self._send_json({"items": items})
+                        "image": item_base + img_full,
+                    })
+                out_items.sort(key=lambda x: x["name"])
+                self._send_json({"items": out_items})
                 return
             if path == "/api/runes":
                 dd = state.dd()
-                runes = [
-                    {"id": r.id, "key": r.key, "name": r.name, "tree": r.tree, "is_keystone": r.is_keystone}
-                    for r in dd.runes()
-                ]
-                self._send_json({"runes": runes})
+                tree = dd.runes_tree()
+                rune_base = "https://ddragon.leagueoflegends.com/cdn/img/"
+                out_trees = []
+                for t in tree:
+                    out_trees.append({
+                        "id": t["id"],
+                        "key": t["key"],
+                        "name": t["name"],
+                        "icon": rune_base + t.get("icon", ""),
+                        "slots": [
+                            {
+                                "runes": [
+                                    {
+                                        "id": r["id"],
+                                        "key": r["key"],
+                                        "name": r["name"],
+                                        "icon": rune_base + r.get("icon", ""),
+                                        "shortDesc": _short_desc(r),
+                                    }
+                                    for r in slot.get("runes", [])
+                                ]
+                            }
+                            for slot in t.get("slots", [])
+                        ],
+                    })
+                # Stat shards aren't in Data Dragon — return them as a static set so the
+                # client can render the third tier of the rune page identically.
+                self._send_json({"trees": out_trees, "shards": _STAT_SHARDS})
                 return
             self.send_error(404, "Not Found")
 

@@ -13,15 +13,46 @@
   </header>
 
   <main>
-    <section class="panel build">
-      <h2>Build</h2>
+    <section class="panel champion-panel">
+      <h2>Champion</h2>
+      <div class="selected-row">
+        <img id="champ-portrait" alt="" />
+        <div class="selected-info">
+          <div id="champ-name" class="big">— pick a champion —</div>
+          <div id="champ-title" class="muted"></div>
+        </div>
+        <label class="inline">Level
+          <input type="number" id="level" min="1" max="18" value="11" />
+        </label>
+      </div>
+      <input id="champ-search" placeholder="Search champion…" />
+      <div id="champ-grid" class="icon-grid sm"></div>
+    </section>
 
-      <label>Champion
-        <input list="champion-list" id="champion" placeholder="Garen" />
-        <datalist id="champion-list"></datalist>
-      </label>
+    <section class="panel target-panel">
+      <h2>Target</h2>
+      <div class="grid2">
+        <label>Name <input id="target-name" value="Dummy" /></label>
+        <label>Level <input type="number" id="target-level" min="1" max="18" value="11" /></label>
+        <label>Max HP <input type="number" id="target-hp" value="2400" /></label>
+        <label>Current HP <input type="number" id="target-current-hp" value="2400" /></label>
+        <label>Armor <input type="number" id="target-armor" value="120" /></label>
+        <label>Magic resist <input type="number" id="target-mr" value="50" /></label>
+        <label>Damage taken multiplier <input type="number" id="target-dr" step="0.05" value="1.0" /></label>
+      </div>
+    </section>
 
-      <label>Level <input type="number" id="level" min="1" max="18" value="11" /></label>
+    <section class="panel items-panel">
+      <h2>Items</h2>
+      <div id="item-slots" class="item-slots"></div>
+      <details>
+        <summary>Click an item slot above, then pick from the catalog</summary>
+        <div class="item-controls">
+          <input id="item-search" placeholder="Search items…" />
+          <div id="item-tags" class="tag-row"></div>
+        </div>
+        <div id="item-grid" class="icon-grid md"></div>
+      </details>
 
       <fieldset>
         <legend>Skill ranks</legend>
@@ -29,22 +60,6 @@
         <label>W <input type="number" id="rank-w" min="0" max="5" value="5" /></label>
         <label>E <input type="number" id="rank-e" min="0" max="5" value="5" /></label>
         <label>R <input type="number" id="rank-r" min="0" max="3" value="3" /></label>
-      </fieldset>
-
-      <fieldset>
-        <legend>Items (up to 6)</legend>
-        <div id="item-rows"></div>
-      </fieldset>
-
-      <fieldset>
-        <legend>Runes</legend>
-        <label>Keystone
-          <input list="rune-list" id="keystone" placeholder="Conqueror" />
-          <datalist id="rune-list"></datalist>
-        </label>
-        <label>Adaptive AD shard <input type="number" id="shard-ad" value="0" /></label>
-        <label>Adaptive AP shard <input type="number" id="shard-ap" value="0" /></label>
-        <label>Attack speed shard <input type="number" id="shard-as" step="0.01" value="0" /></label>
       </fieldset>
 
       <fieldset>
@@ -57,18 +72,28 @@
       </fieldset>
     </section>
 
-    <section class="panel target">
-      <h2>Target</h2>
-      <label>Name <input id="target-name" value="Dummy" /></label>
-      <label>Level <input type="number" id="target-level" min="1" max="18" value="11" /></label>
-      <label>Max HP <input type="number" id="target-hp" value="2400" /></label>
-      <label>Current HP <input type="number" id="target-current-hp" value="2400" /></label>
-      <label>Armor <input type="number" id="target-armor" value="120" /></label>
-      <label>Magic resist <input type="number" id="target-mr" value="50" /></label>
-      <label>Damage taken multiplier <input type="number" id="target-dr" step="0.05" value="1.0" /></label>
+    <section class="panel runes-panel">
+      <h2>Runes</h2>
+      <div class="rune-page">
+        <div class="rune-tree primary">
+          <div class="tree-header">Primary</div>
+          <div class="tree-tabs" id="primary-tabs"></div>
+          <div class="rune-slots" id="primary-slots"></div>
+        </div>
+        <div class="rune-tree secondary">
+          <div class="tree-header">Secondary</div>
+          <div class="tree-tabs" id="secondary-tabs"></div>
+          <div class="rune-slots" id="secondary-slots"></div>
+        </div>
+        <div class="rune-shards">
+          <div class="tree-header">Stat Shards</div>
+          <div id="shard-rows"></div>
+        </div>
+      </div>
+      <p id="rune-summary" class="muted"></p>
     </section>
 
-    <section class="panel actions">
+    <section class="panel actions-panel">
       <h2>What to compute</h2>
       <label class="check"><input type="checkbox" id="want-auto" checked /> Auto attack (crit / non-crit / expected)</label>
       <label>Spell single-casts (comma-sep, e.g. <code>Q,E,R</code>)
@@ -87,9 +112,9 @@
       <button id="run">Predict damage</button>
     </section>
 
-    <section class="panel results">
+    <section class="panel results-panel">
       <h2>Results</h2>
-      <div id="results"><em>Click "Predict damage" to compute.</em></div>
+      <div id="results"><em>Pick a champion + keystone, then click "Predict damage".</em></div>
     </section>
   </main>
 

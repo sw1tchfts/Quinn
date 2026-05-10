@@ -132,6 +132,12 @@ class DataDragon:
                     )
         return out
 
+    def runes_tree(self) -> list:
+        """Return the raw runesReforged.json tree (with icons, slots, etc.)."""
+        return self._fetch_json(
+            self._cdn("runesReforged.json"), f"{self.version}/runesReforged.json"
+        )
+
     def rune(self, name: str) -> Rune:
         target = name.lower()
         for r in self.runes():
