@@ -14,6 +14,19 @@ pip install -e .
 Python 3.9+. The only runtime dependency is `requests`. Data Dragon JSON is
 cached under `~/.cache/lol_damage/` so subsequent runs work offline.
 
+## Web UI (one-click)
+
+Double-click `start.bat` (Windows) or run `./start.sh` (macOS/Linux). The
+script starts a local server on `http://127.0.0.1:8765/` and opens the page
+in your browser. Pick a champion, items, runes, and a target; hit "Predict
+damage" and you'll see auto-attack, spell, multi-hit, and combo results.
+
+You can also run the server directly:
+
+```bash
+python -m lol_damage.server --open
+```
+
 ## CLI
 
 List things:

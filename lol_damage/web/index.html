@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LoL Damage Predictor</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>LoL Damage Predictor</h1>
+    <p class="version">data dragon: <span id="ddversion">…</span></p>
+  </header>
+
+  <main>
+    <section class="panel build">
+      <h2>Build</h2>
+
+      <label>Champion
+        <input list="champion-list" id="champion" placeholder="Garen" />
+        <datalist id="champion-list"></datalist>
+      </label>
+
+      <label>Level <input type="number" id="level" min="1" max="18" value="11" /></label>
+
+      <fieldset>
+        <legend>Skill ranks</legend>
+        <label>Q <input type="number" id="rank-q" min="0" max="5" value="5" /></label>
+        <label>W <input type="number" id="rank-w" min="0" max="5" value="5" /></label>
+        <label>E <input type="number" id="rank-e" min="0" max="5" value="5" /></label>
+        <label>R <input type="number" id="rank-r" min="0" max="3" value="3" /></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Items (up to 6)</legend>
+        <div id="item-rows"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Runes</legend>
+        <label>Keystone
+          <input list="rune-list" id="keystone" placeholder="Conqueror" />
+          <datalist id="rune-list"></datalist>
+        </label>
+        <label>Adaptive AD shard <input type="number" id="shard-ad" value="0" /></label>
+        <label>Adaptive AP shard <input type="number" id="shard-ap" value="0" /></label>
+        <label>Attack speed shard <input type="number" id="shard-as" step="0.01" value="0" /></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Penetration / overrides</legend>
+        <label>Lethality <input type="number" id="lethality" value="0" /></label>
+        <label>%Armor pen <input type="number" id="armor-pen-pct" step="0.01" value="0" /></label>
+        <label>Flat magic pen <input type="number" id="flat-magic-pen" value="0" /></label>
+        <label>%Magic pen <input type="number" id="magic-pen-pct" step="0.01" value="0" /></label>
+        <label>Crit damage <input type="number" id="crit-damage" step="0.05" value="1.75" /></label>
+      </fieldset>
+    </section>
+
+    <section class="panel target">
+      <h2>Target</h2>
+      <label>Name <input id="target-name" value="Dummy" /></label>
+      <label>Level <input type="number" id="target-level" min="1" max="18" value="11" /></label>
+      <label>Max HP <input type="number" id="target-hp" value="2400" /></label>
+      <label>Current HP <input type="number" id="target-current-hp" value="2400" /></label>
+      <label>Armor <input type="number" id="target-armor" value="120" /></label>
+      <label>Magic resist <input type="number" id="target-mr" value="50" /></label>
+      <label>Damage taken multiplier <input type="number" id="target-dr" step="0.05" value="1.0" /></label>
+    </section>
+
+    <section class="panel actions">
+      <h2>What to compute</h2>
+      <label class="check"><input type="checkbox" id="want-auto" checked /> Auto attack (crit / non-crit / expected)</label>
+      <label>Spell single-casts (comma-sep, e.g. <code>Q,E,R</code>)
+        <input id="spells" value="Q,E,R" />
+      </label>
+      <label>Multi-hit <input type="number" id="multi-n" min="0" value="0" /> x <input id="multi-action" value="auto" placeholder="auto / Q / W / E / R" />
+        <select id="multi-crit">
+          <option value="expected">expected crit</option>
+          <option value="always">always crit</option>
+          <option value="never">never crit</option>
+        </select>
+      </label>
+      <label>Combo (tokens: Q W E R, A=auto, A!=crit, A.=non-crit, KEYSTONE)
+        <input id="combo" value="Q,E,A,KEYSTONE,R" />
+      </label>
+      <button id="run">Predict damage</button>
+    </section>
+
+    <section class="panel results">
+      <h2>Results</h2>
+      <div id="results"><em>Click "Predict damage" to compute.</em></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
