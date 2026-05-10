@@ -369,8 +369,6 @@ function gatherPayload() {
   ];
   const shards = resolveShards();
 
-  const spells = $("spells").value.split(",").map((s) => s.trim()).filter(Boolean);
-  const multiN = parseInt($("multi-n").value || "0", 10);
   const combo = $("combo").value.trim();
 
   return {
@@ -401,9 +399,6 @@ function gatherPayload() {
       damage_reduction: parseFloat($("target-dr").value || "1"),
     },
     actions: {
-      auto: $("want-auto").checked,
-      spells,
-      multi: multiN > 0 ? { n: multiN, action: $("multi-action").value.trim() || "auto", crit_pattern: $("multi-crit").value } : null,
       combo: combo || null,
     },
   };
@@ -413,21 +408,49 @@ function gatherPayload() {
 
 function dtClass(t) { return `dt-${(t || "unknown").toLowerCase()}`; }
 
-function renderHit(h) {
-  return `<tr>
-    <td>${h.label}</td>
-    <td class="${dtClass(h.damage_type)}">${h.damage_type}</td>
-    <td>${h.raw.toFixed(1)}</td>
-    <td>${h.mitigated.toFixed(1)}</td>
-    <td class="note">${h.notes || ""}</td>
-  </tr>`;
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function renderVariant(title, variant, openByDefault) {
+  if (!variant) return "";
+  const hits = variant.hits || [];
+  const total = (variant.total || 0).toFixed(1);
+  const kill = variant.killed ? '<span class="killed">KILL</span>' : "";
+  const remaining = (variant.target_hp_remaining || 0).toFixed(0);
+
+  const hitBlocks = hits.map((h) => {
+    const expl = (h.explanation || []).map((line) => `<li>${escapeHtml(line)}</li>`).join("");
+    const note = h.notes ? `<div class="note">${escapeHtml(h.notes)}</div>` : "";
+    return `<details class="hit">
+      <summary>
+        <span class="hit-label">${escapeHtml(h.label)}</span>
+        <span class="hit-type ${dtClass(h.damage_type)}">${escapeHtml(h.damage_type)}</span>
+        <span class="hit-mit">${h.mitigated.toFixed(1)}</span>
+      </summary>
+      <ul class="explanation">${expl}</ul>
+      ${note}
+    </details>`;
+  }).join("");
+
+  return `<details class="variant" ${openByDefault ? "open" : ""}>
+    <summary>
+      <span class="variant-title">${title}</span>
+      <span class="variant-total">${total}</span>
+      ${kill}
+    </summary>
+    <div class="variant-body">
+      ${hits.length ? hitBlocks : '<p class="note">No hits.</p>'}
+      <p class="note">Target HP remaining: ${remaining}</p>
+    </div>
+  </details>`;
 }
 
 function renderResult(data) {
-  const out = [];
   const s = data.stats;
+  const out = [];
 
-  out.push(`<h3>${data.champion} (lvl ${data.level}) vs ${data.target.name}</h3>`);
+  out.push(`<h3>${escapeHtml(data.champion)} (lvl ${data.level}) vs ${escapeHtml(data.target.name)}</h3>`);
   out.push(`<div class="kv">
     <div class="k">AD</div><div>${s.total_ad} (base ${s.base_ad} + bonus ${s.bonus_ad})</div>
     <div class="k">AP</div><div>${s.ap}</div>
@@ -438,33 +461,12 @@ function renderResult(data) {
     <div class="k">HP / Armor / MR</div><div>${s.max_hp} / ${s.armor} / ${s.magic_resist}</div>
   </div>`);
 
-  if (data.auto) {
-    out.push("<h3>Auto attack</h3><table><thead><tr><th>Variant</th><th>Type</th><th>Raw</th><th>Mitigated</th><th></th></tr></thead><tbody>");
-    out.push(renderHit(data.auto.expected));
-    out.push(renderHit(data.auto.crit));
-    out.push(renderHit(data.auto.non_crit));
-    out.push("</tbody></table>");
-  }
-
-  if (data.spells && data.spells.length) {
-    out.push("<h3>Spell single-casts</h3><table><thead><tr><th>Spell</th><th>Type</th><th>Raw</th><th>Mitigated</th><th>Note</th></tr></thead><tbody>");
-    for (const h of data.spells) out.push(renderHit(h));
-    out.push("</tbody></table>");
-  }
-
-  if (data.multi) {
-    out.push(`<h3>Multi-hit (total ${data.multi.total})${data.multi.killed ? ' <span class="killed">KILL</span>' : ""}</h3>`);
-    out.push("<table><thead><tr><th>Hit</th><th>Type</th><th>Raw</th><th>Mitigated</th><th></th></tr></thead><tbody>");
-    for (const h of data.multi.hits) out.push(renderHit(h));
-    out.push(`</tbody></table><p class="note">Target HP remaining: ${data.multi.target_hp_remaining}</p>`);
-  }
-
-  if (data.combo) {
-    out.push(`<h3>Combo (total ${data.combo.total})${data.combo.killed ? ' <span class="killed">KILL</span>' : ""}</h3>`);
-    out.push("<table><thead><tr><th>Hit</th><th>Type</th><th>Raw</th><th>Mitigated</th><th></th></tr></thead><tbody>");
-    for (const h of data.combo.hits) out.push(renderHit(h));
-    out.push(`</tbody></table><p class="note">Target HP remaining: ${data.combo.target_hp_remaining}</p>`);
-  }
+  const v = data.combo_variants || {};
+  out.push('<div class="variants">');
+  out.push(renderVariant("Total damage (no crit)", v.no_crit, false));
+  out.push(renderVariant("Total damage (predicted crit)", v.expected_crit, true));
+  out.push(renderVariant("Total damage (max crit)", v.max_crit, false));
+  out.push("</div>");
 
   $("results").innerHTML = out.join("");
 }

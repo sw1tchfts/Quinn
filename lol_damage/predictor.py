@@ -8,8 +8,12 @@ from .damage import (
     CombatStats,
     apply_damage,
     crit_auto_damage,
+    effective_armor,
+    effective_mr,
     expected_auto_damage,
+    lethality_to_flat_pen,
     non_crit_auto_damage,
+    resist_multiplier,
 )
 from .models import Build, Item, Target
 from .runes import apply_rune_stats, keystone_amp, keystone_proc_damage
@@ -23,6 +27,7 @@ class HitResult:
     raw: float
     mitigated: float
     notes: str = ""
+    explanation: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -95,19 +100,33 @@ class DamagePredictor:
     def auto_attack(self, target: Target, crit: Optional[bool] = None) -> HitResult:
         """A single auto-attack. ``crit=None`` returns expected damage."""
         cs = self.combat_stats()
+        steps: List[str] = [f"Total AD = base {cs.base_ad:.1f} + bonus {cs.bonus_ad:.1f} = {cs.total_ad:.1f}"]
+
         if crit is True:
+            raw = cs.total_ad * cs.crit_damage
+            steps.append(f"Crit: {cs.total_ad:.1f} × {cs.crit_damage:.2f} = {raw:.1f}")
             mitigated = crit_auto_damage(cs, target.armor, target.damage_reduction)
             label = "Auto (crit)"
-            raw = cs.total_ad * cs.crit_damage
         elif crit is False:
-            mitigated = non_crit_auto_damage(cs, target.armor, target.damage_reduction)
-            label = "Auto (non-crit)"
             raw = cs.total_ad
+            steps.append(f"No crit: raw = {raw:.1f}")
+            mitigated = non_crit_auto_damage(cs, target.armor, target.damage_reduction)
+            label = "Auto"
         else:
+            mult = 1 + cs.crit_chance * (cs.crit_damage - 1)
+            raw = cs.total_ad * mult
+            steps.append(
+                f"Avg crit (chance {cs.crit_chance:.0%}, mult {cs.crit_damage:.2f}×): "
+                f"{cs.total_ad:.1f} × {mult:.3f} = {raw:.1f}"
+            )
             mitigated = expected_auto_damage(cs, target.armor, target.damage_reduction)
-            label = f"Auto (E[crit]={cs.crit_chance:.0%})"
-            raw = cs.total_ad * (1 + cs.crit_chance * (cs.crit_damage - 1))
-        return HitResult(label=label, damage_type="physical", raw=raw, mitigated=mitigated)
+            label = f"Auto (avg)"
+
+        steps.extend(_armor_steps(cs, target))
+        if cs.physical_amp != 1.0 or cs.versus_amp != 1.0:
+            steps.append(f"Amps: physical ×{cs.physical_amp:.2f}, vs target ×{cs.versus_amp:.2f}")
+        steps.append(f"Mitigated = {mitigated:.1f}")
+        return HitResult(label=label, damage_type="physical", raw=raw, mitigated=mitigated, explanation=steps)
 
     def spell(self, spell_key: str, target: Target) -> HitResult:
         """Damage from a single cast of Q/W/E/R."""
@@ -116,19 +135,59 @@ class DamagePredictor:
         cid = b.champion.id
         defn = lookup_spell(cid, spell_key)
         if defn is None:
-            # Fall back to zero damage but still surface the entry so users see it.
             return HitResult(
-                label=f"{cid} {spell_key}",
+                label=f"{cid} {spell_key.upper()}",
                 damage_type="unknown",
                 raw=0.0,
                 mitigated=0.0,
-                notes="No registered formula. Add via lol_damage.spell_overrides.register().",
+                notes=f"No registered formula for {cid} {spell_key.upper()}.",
+                explanation=[
+                    f"No registered formula for {cid} {spell_key.upper()}.",
+                    "Add via lol_damage.spell_overrides.register().",
+                ],
             )
         rank = max(1, b.skill_ranks.get(spell_key.upper(), 1))
-        raw = _resolve_spell_raw(defn, rank, cs, target)
+
+        steps: List[str] = []
+        base_list = defn.get("base_per_rank") or []
+        base = float(base_list[min(rank, len(base_list)) - 1]) if base_list else 0.0
+        raw = base
+        steps.append(f"Base @ rank {rank}: {base:.1f}")
+
+        def add(ratio_key: str, label: str, value: float) -> None:
+            nonlocal raw
+            ratio = defn.get(ratio_key, 0.0) or 0.0
+            if ratio == 0.0 or value == 0.0:
+                return
+            v = ratio * value
+            raw += v
+            steps.append(f"+ {ratio * 100:.0f}% {label} ({value:.1f}) = {v:.1f}")
+
+        add("ad_ratio", "total AD", cs.total_ad)
+        add("bonus_ad_ratio", "bonus AD", cs.bonus_ad)
+        add("ap_ratio", "AP", cs.ap)
+        add("target_max_hp_ratio", "target max HP", target.max_hp)
+        add("target_missing_hp_ratio", "target missing HP", target.missing_hp())
+
+        steps.append(f"Raw total: {raw:.1f}")
+
         dt = defn["type"]
+        if dt == "physical":
+            steps.extend(_armor_steps(cs, target))
+        elif dt == "magic":
+            steps.extend(_mr_steps(cs, target))
+        else:
+            steps.append("True damage: ignores resists")
+
         mitigated = apply_damage(raw, dt, cs, target.armor, target.magic_resist, target.damage_reduction)
-        return HitResult(label=f"{cid} {spell_key.upper()}", damage_type=dt, raw=raw, mitigated=mitigated)
+        steps.append(f"Mitigated = {mitigated:.1f}")
+        return HitResult(
+            label=f"{cid} {spell_key.upper()}",
+            damage_type=dt,
+            raw=raw,
+            mitigated=mitigated,
+            explanation=steps,
+        )
 
     # ---------------- multi-hit ----------------
 
@@ -204,8 +263,15 @@ class DamagePredictor:
             elif tok.upper() == "KEYSTONE":
                 cs = self.combat_stats()
                 amount = keystone_proc_damage(keystone_name, cs, target)
-                # The damage type is rolled into the proc; we tag it 'mixed' for display.
-                hr = HitResult(label=f"Keystone: {keystone_name}", damage_type="proc", raw=amount, mitigated=amount)
+                explanation = [f"Keystone: {keystone_name or '(none)'}"]
+                if amount == 0 and keystone_name:
+                    explanation.append("No proc damage (either non-damage keystone or condition not met).")
+                else:
+                    explanation.append(f"Proc damage (post-mitigation): {amount:.1f}")
+                hr = HitResult(
+                    label=f"Keystone: {keystone_name or '(none)'}",
+                    damage_type="proc", raw=amount, mitigated=amount, explanation=explanation,
+                )
             else:
                 raise ValueError(f"Unknown combo token: {token}")
             result.hits.append(hr)
@@ -223,6 +289,31 @@ class DamagePredictor:
 
 
 # ---------------- helpers ----------------
+
+def _armor_steps(cs: CombatStats, target: Target) -> List[str]:
+    flat_pen = lethality_to_flat_pen(cs.lethality, cs.level)
+    eff = effective_armor(target.armor, flat_pen, cs.armor_pen_percent)
+    mult = resist_multiplier(eff)
+    parts = [f"Target armor {target.armor:.0f}"]
+    if cs.armor_pen_percent:
+        parts.append(f"−{cs.armor_pen_percent * 100:.0f}% pen")
+    if flat_pen:
+        parts.append(f"−{flat_pen:.1f} flat (lethality {cs.lethality:.0f})")
+    parts.append(f"= effective {eff:.1f}")
+    return [", ".join(parts), f"Mitigation multiplier: ×{mult:.3f}"]
+
+
+def _mr_steps(cs: CombatStats, target: Target) -> List[str]:
+    eff = effective_mr(target.magic_resist, cs.flat_magic_pen, cs.magic_pen_percent)
+    mult = resist_multiplier(eff)
+    parts = [f"Target MR {target.magic_resist:.0f}"]
+    if cs.magic_pen_percent:
+        parts.append(f"−{cs.magic_pen_percent * 100:.0f}% pen")
+    if cs.flat_magic_pen:
+        parts.append(f"−{cs.flat_magic_pen:.1f} flat")
+    parts.append(f"= effective {eff:.1f}")
+    return [", ".join(parts), f"Mitigation multiplier: ×{mult:.3f}"]
+
 
 def _resolve_spell_raw(defn: dict, rank: int, cs: CombatStats, target: Target) -> float:
     base_list = defn.get("base_per_rank") or []

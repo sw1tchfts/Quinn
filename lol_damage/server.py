@@ -316,34 +316,21 @@ def _run_prediction(dd: DataDragon, payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     actions = payload.get("actions") or {}
+    combo = actions.get("combo") or ["A"]
+    if isinstance(combo, str):
+        combo = [s.strip() for s in combo.split(",") if s.strip()]
+    if not combo:
+        combo = ["A"]
+    out["combo_input"] = combo
 
-    if actions.get("auto"):
-        out["auto"] = {
-            "expected": _hit_to_dict(p.auto_attack(target, crit=None)),
-            "crit": _hit_to_dict(p.auto_attack(target, crit=True)),
-            "non_crit": _hit_to_dict(p.auto_attack(target, crit=False)),
-        }
+    def replace_autos(seq: List[str], replacement: str) -> List[str]:
+        return [replacement if tok == "A" else tok for tok in seq]
 
-    spells_req = actions.get("spells") or []
-    if spells_req:
-        out["spells"] = [_hit_to_dict(p.spell(s, target)) for s in spells_req]
-
-    multi = actions.get("multi")
-    if multi:
-        n = int(multi.get("n", 1))
-        action = multi.get("action", "auto")
-        if action.upper() in {"Q", "W", "E", "R"}:
-            r = p.multi_hit(target, n=n, action="spell", spell_key=action.upper())
-        else:
-            r = p.multi_hit(target, n=n, action="auto", crit_pattern=multi.get("crit_pattern", "expected"))
-        out["multi"] = _combo_to_dict(r)
-
-    combo = actions.get("combo")
-    if combo:
-        if isinstance(combo, str):
-            combo = [s.strip() for s in combo.split(",") if s.strip()]
-        out["combo"] = _combo_to_dict(p.combo(combo, target))
-
+    out["combo_variants"] = {
+        "no_crit": _combo_to_dict(p.combo(replace_autos(combo, "A."), target)),
+        "expected_crit": _combo_to_dict(p.combo(combo, target)),
+        "max_crit": _combo_to_dict(p.combo(replace_autos(combo, "A!"), target)),
+    }
     return out
 
 
@@ -354,6 +341,7 @@ def _hit_to_dict(h) -> Dict[str, Any]:
         "raw": round(h.raw, 1),
         "mitigated": round(h.mitigated, 1),
         "notes": h.notes,
+        "explanation": list(getattr(h, "explanation", []) or []),
     }
 
 

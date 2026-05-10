@@ -104,21 +104,11 @@
     </section>
 
     <section class="panel actions-panel">
-      <h2>What to compute</h2>
-      <label class="check"><input type="checkbox" id="want-auto" checked /> Auto attack (crit / non-crit / expected)</label>
-      <label>Spell single-casts (comma-sep, e.g. <code>Q,E,R</code>)
-        <input id="spells" value="Q,E,R" />
-      </label>
-      <label>Multi-hit <input type="number" id="multi-n" min="0" value="0" /> x <input id="multi-action" value="auto" placeholder="auto / Q / W / E / R" />
-        <select id="multi-crit">
-          <option value="expected">expected crit</option>
-          <option value="always">always crit</option>
-          <option value="never">never crit</option>
-        </select>
-      </label>
-      <label>Combo (tokens: Q W E R, A=auto, A!=crit, A.=non-crit, KEYSTONE)
+      <h2>Action sequence</h2>
+      <label>Tokens (comma-sep): <code>Q W E R</code> spells, <code>A</code> auto, <code>KEYSTONE</code> rune proc
         <input id="combo" value="Q,E,A,KEYSTONE,R" />
       </label>
+      <p class="muted">The same sequence is computed three ways: never crit, average crit, max crit.</p>
       <button id="run">Predict damage</button>
     </section>
 
