@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lol-damage-predictor"
+version = "0.1.0"
+description = "League of Legends damage predictor using Data Dragon"
+requires-python = ">=3.9"
+dependencies = ["requests>=2.31.0"]
+
+[project.scripts]
+lol-damage = "lol_damage.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["lol_damage*"]
