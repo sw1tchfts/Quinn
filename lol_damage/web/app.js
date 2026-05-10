@@ -493,6 +493,31 @@ async function run() {
   }
 }
 
+// Standard skill leveling: R at 6/11/16, the rest distributed by max order.
+function distributeSkillPoints(level, order) {
+  const ranks = { Q: 0, W: 0, E: 0, R: 0 };
+  if (level >= 6) ranks.R = 1;
+  if (level >= 11) ranks.R = 2;
+  if (level >= 16) ranks.R = 3;
+  let left = level - ranks.R;
+  const seq = (order || "QEW").split("");
+  for (const k of seq) { if (left <= 0) break; ranks[k] = 1; left--; }
+  for (const k of seq) {
+    while (left > 0 && ranks[k] < 5) { ranks[k]++; left--; }
+  }
+  return ranks;
+}
+
+function autoFillSkills() {
+  const level = Math.max(1, Math.min(18, parseInt($("level").value, 10) || 1));
+  const order = ($("skill-order") && $("skill-order").value) || "QEW";
+  const r = distributeSkillPoints(level, order);
+  $("rank-q").value = r.Q;
+  $("rank-w").value = r.W;
+  $("rank-e").value = r.E;
+  $("rank-r").value = r.R;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   loadCatalogs().catch((e) => {
     $("ddversion").textContent = "(failed to load)";
@@ -501,5 +526,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("champ-search").addEventListener("input", renderChampionGrid);
   $("item-search").addEventListener("input", renderItemGrid);
+  $("level").addEventListener("input", autoFillSkills);
+  $("skill-order").addEventListener("change", autoFillSkills);
+  autoFillSkills();
   $("run").addEventListener("click", run);
 });

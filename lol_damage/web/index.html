@@ -55,7 +55,17 @@
       </details>
 
       <fieldset>
-        <legend>Skill ranks</legend>
+        <legend>Skill ranks (auto from level)</legend>
+        <label>Max order
+          <select id="skill-order">
+            <option value="QEW">Q → E → W</option>
+            <option value="QWE">Q → W → E</option>
+            <option value="EQW">E → Q → W</option>
+            <option value="EWQ">E → W → Q</option>
+            <option value="WQE">W → Q → E</option>
+            <option value="WEQ">W → E → Q</option>
+          </select>
+        </label>
         <label>Q <input type="number" id="rank-q" min="0" max="5" value="5" /></label>
         <label>W <input type="number" id="rank-w" min="0" max="5" value="5" /></label>
         <label>E <input type="number" id="rank-e" min="0" max="5" value="5" /></label>
